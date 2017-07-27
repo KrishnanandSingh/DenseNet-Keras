@@ -1,6 +1,5 @@
 """Test ImageNet pretrained DenseNet"""
 
-import cv2
 import numpy as np
 from keras.optimizers import SGD
 import keras.backend as K
@@ -8,8 +7,11 @@ import keras.backend as K
 # We only test DenseNet-121 in this script for demo purpose
 from densenet121 import DenseNet 
 
-im = cv2.resize(cv2.imread('resources/cat.jpg'), (224, 224)).astype(np.float32)
-#im = cv2.resize(cv2.imread('shark.jpg'), (224, 224)).astype(np.float32)
+from keras.preprocessing import image
+from keras.applications.imagenet_utils import decode_predictions
+
+im = image.load_img('resources/cat.jpg', target_size=(224, 224))
+im = image.img_to_array(im)
 
 # Subtract mean pixel and multiple by scaling constant 
 # Reference: https://github.com/shicai/DenseNet-Caffe
@@ -44,4 +46,5 @@ with open('resources/classes.txt', 'r') as list_:
     for line in list_:
         classes.append(line.rstrip('\n'))
 
-print 'Prediction: '+str(classes[np.argmax(out)])
+print('Prediction: '+str(classes[np.argmax(out)]))
+print('Predicted:', decode_predictions(out))
