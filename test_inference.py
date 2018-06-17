@@ -6,8 +6,8 @@ import keras.backend as K
 from keras.preprocessing import image
 from keras.applications.imagenet_utils import decode_predictions
 
-# We only test DenseNet-169 in this script for demo purpose
-from densenet169 import DenseNet
+# We only test DenseNet-161 in this script for demo purpose
+from densenet161 import DenseNet
 
 im = image.load_img('resources/cat.jpg', target_size=(224, 224))
 im = image.img_to_array(im)
@@ -23,10 +23,10 @@ if K.image_dim_ordering() == 'th':
   im = im.transpose((2, 0, 1))
 
   # Use pre-trained weights for Theano backend
-  weights_path = 'imagenet_models/densenet169_weights_th.h5'
+  weights_path = 'imagenet_models/densenet161_weights_th.h5'
 else:
   # Use pre-trained weights for Tensorflow backend
-  weights_path = 'imagenet_models/densenet169_weights_tf.h5'
+  weights_path = 'imagenet_models/densenet161_weights_tf.h5'
 
 # Insert a new dimension for the batch_size
 im = np.expand_dims(im, axis=0)
