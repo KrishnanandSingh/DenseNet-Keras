@@ -1,4 +1,7 @@
+import keras
+from keras.datasets import cifar10
 from keras.models import Model
+from keras.optimizers import SGD
 from keras.layers import Input, merge, ZeroPadding2D
 from keras.layers.merge import concatenate
 from keras.layers.core import Dense, Dropout, Activation
@@ -9,7 +12,7 @@ import keras.backend as K
 
 from custom_layers import Scale
 
-def DenseNet(nb_dense_block=4, growth_rate=48, nb_filter=96, reduction=0.0, dropout_rate=0.0, weight_decay=1e-4, classes=1000, weights_path=None):
+def DenseNet(nb_dense_block=4, growth_rate=48, nb_filter=96, reduction=0.0, dropout_rate=0.0, weight_decay=1e-4, classes=1000, weights_path=None, num_classes=10):
     '''Instantiate the DenseNet 161 architecture,
         # Arguments
             nb_dense_block: number of dense blocks to add to end
@@ -65,16 +68,22 @@ def DenseNet(nb_dense_block=4, growth_rate=48, nb_filter=96, reduction=0.0, drop
     x = BatchNormalization(epsilon=eps, axis=concat_axis, name='conv'+str(final_stage)+'_blk_bn')(x)
     x = Scale(axis=concat_axis, name='conv'+str(final_stage)+'_blk_scale')(x)
     x = Activation('relu', name='relu'+str(final_stage)+'_blk')(x)
-    x = GlobalAveragePooling2D(name='pool'+str(final_stage))(x)
+    gap = GlobalAveragePooling2D(name='pool'+str(final_stage))(x)
 
-    x = Dense(classes, name='fc6')(x)
-    x = Activation('softmax', name='prob')(x)
+    d_fc = Dense(classes, name='fc6')(gap)
+    activn = Activation('softmax', name='prob')(d_fc)
 
-    model = Model(img_input, x, name='densenet')
-
+    model = Model(img_input, activn, name='densenet')
+    
     if weights_path is not None:
       model.load_weights(weights_path)
+    
+    # Transfer learning
+    # Truncate and replace softmax layer
+    d_new_fc = Dense(num_classes, name='fc6')(gap)
+    new_activn = Activation('softmax', name='prob')(d_new_fc)
 
+    model = Model(img_input, new_activn)
     return model
 
 
@@ -170,3 +179,41 @@ def dense_block(x, stage, nb_layers, nb_filter, growth_rate, dropout_rate=None, 
 
     return concat_feat, nb_filter
 
+if __name__ == '__main__':
+
+    # fine tuning on CIFAR
+    num_classes = 10 
+    batch_size = 8
+    nb_epoch = 10
+    
+    # Load CIFAR10 Data
+    (x_train, y_train), (x_test, y_test) = cifar10.load_data()
+    img_height, img_width, channel = x_train.shape[1],x_train.shape[2],x_train.shape[3]
+
+    # convert to one hot encoing 
+    y_train = keras.utils.to_categorical(y_train, num_classes)
+    y_test = keras.utils.to_categorical(y_test, num_classes)
+
+
+    # Use pre-trained weights for Tensorflow backend
+    weights_path = 'imagenet_models/densenet161_weights_tf.h5'
+    
+    # Load our model
+    model = DenseNet(reduction=0.5, classes=1000, weights_path=weights_path, num_classes=num_classes)
+    
+    # Learning rate is decreased to 0.001 as this model is already trained
+    sgd = SGD(lr=1e-3, decay=1e-6, momentum=0.9, nesterov=True)
+    model.compile(optimizer=sgd, loss='categorical_crossentropy', metrics=['accuracy'])
+
+    # Start Fine-tuning
+    model.fit(x_train, y_train,
+              batch_size=batch_size,
+              nb_epoch=nb_epoch,
+              shuffle=True,
+              verbose=1,
+              validation_data=(x_test, y_test),
+              )
+
+    score = model.evaluate(x_test, y_test, verbose=1)
+    print('Test loss:', score[0])
+    print('Test accuracy:', score[1])
